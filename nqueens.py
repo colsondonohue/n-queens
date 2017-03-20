@@ -1,109 +1,138 @@
 from random import choice, randint
 
-def assign(board, row, conflicts):
-    """ assign queen to column in row such that conflicts are minimized
-    :rtype: Tuple(int, Set[int])
-    """
+class NQueens:
 
-    min_conflicts = float('inf') # current lowest number of conflicts
-    min_columns = [] # the current columns with the minimum number of conflicts
-    column_conflicts = [] # the corresponding sets of conflicts for each column
+    def __init__(self, size):
+        self.size = size
+        self.board = [None] * size
+        self.conflicts = set()
+        self.empty_cols = set([x for x in range(1, size + 1)])
+        self.vert = [0] * size
+        self.left_diag = [0] * (2 * size - 1)
+        self.right_diag = [0] * (2 * size - 1)
 
-    for i in range(1, len(board) + 1):
-        current_conflicts = 0
-        temp_conflicts = set()
 
-        for j, current in enumerate(board):
-            if j == row:
+    def update_counters(self, row, col, delta):
+        self.vert[col - 1] += delta
+        self.left_diag[self.size - 2 - row + col] += delta
+        self.right_diag[row + col - 1] += delta
+
+
+    def count_conflicts(self, row, col):
+        return self.vert[col - 1] + self.left_diag[self.size - 2 - row + col] + self.right_diag[row + col - 1]
+
+
+    def print_state(self):
+        print('board:', self.board)
+        print('conflicts:', self.conflicts)
+        print('empty_cols:', self.empty_cols)
+        print('vert:', self.vert)
+        print('left_diag:', self.left_diag)
+        print('right_diag:', self.right_diag)
+
+    def update_conflicts(self, row, to):
+        for i in range(to):
+            if i == row:
                 continue
-            # check vertical
-            if current == i:
-                current_conflicts += 1
-                temp_conflicts.add(j)
-                # print('vertical conflict: column', i, ' in row', row, ' with column', current, ' in row', j)
-            # check left diagonal
-            if i - (row - j) == current:
-                current_conflicts += 1
-                temp_conflicts.add(j)
-                # print('left diagonal conflict: column', i, ' in row', row, ' with column', current, ' in row', j)
-            # check right diagonal
-            if i + (row - j) == current:
-                current_conflicts += 1
-                temp_conflicts.add(j)
-                # print('right diagonal conflict: column', i, ' in row', row, ' with column', current, ' in row', j)
-
-        if current_conflicts == min_conflicts:
-            min_columns.append(i)
-            column_conflicts.append(temp_conflicts)
-        if current_conflicts < min_conflicts:
-            min_conflicts = current_conflicts
-            min_columns = [i]
-            column_conflicts = [temp_conflicts]
+            conflicting = self.board[i] == self.board[row] or abs(self.board[row] - row) == abs(self.board[i] - i)
+            if conflicting:
+                self.conflicts.add(i)
+            elif i in self.conflicts:
+                self.conflicts.remove(i)
 
 
-    if min_conflicts > 0:
-        conflicts.add(row)
-    if min_conflicts == 0 and row in conflicts:
-        conflicts.remove(row)
+    def generate_row(self, row):
+        def set_vals(col):
+            self.board[row] = col
+            self.update_counters(row, col, 1)
+            self.empty_cols.remove(col)
+            if conflicts != 0:
+                self.update_conflicts(row, row)
+                self.conflicts.add(row)
 
-    tiebreak = randint(0, len(min_columns) - 1)
+        for i in range(50):
+            col = choice(tuple(self.empty_cols))
+            conflicts = self.count_conflicts(row, col)
+            if conflicts == 0:
+                set_vals(col)
+                return
 
-    return min_columns[tiebreak], conflicts.union(column_conflicts[tiebreak])
-
-
-def generate_initial(size):
-    """ assign queens to spaces on initial board,
-    returning board and conflicts for each row
-    :type size: int
-    :rtype: Tuple(List[int], Set[int])
-    """
-    board = [None] * size
-    conflicts = set()
-
-    for row in range(size):
-        column, conflicts = assign(board, row, conflicts)
-        board[row] = column
-
-    return board, conflicts
+        col = choice(tuple(self.empty_cols))
+        set_vals(col)
 
 
-def draw_board(board):
-    """ generate an nxn representation of the board
-    :type board: List[int]
-    """
-    drawn_board = ''
+    def assign(self, row):
+        def remove(row, col):
+            self.update_counters(row, col, -1)
+            if self.vert[col - 1] == 0:
+                self.empty_cols.add(col)
 
-    for placement in board:
-        for i in range(1, placement):
-            drawn_board += 'x '
-        drawn_board += 'q '
-        for j in range(placement, len(board)):
-            drawn_board += 'x '
-        drawn_board = drawn_board[:-1] + '\n'
+        def add(row, col):
+            self.update_counters(row, col, 1)
+            self.board[row] = col
+            if col in self.empty_cols:
+                self.empty_cols.remove(col)
 
-    return drawn_board[:-1]
+        if len(self.empty_cols) > 0:
+            for col in self.empty_cols:
+                if self.count_conflicts(row, col) == 0:
+                    remove(row, self.board[row])
+                    add(row, col)
+                    self.update_conflicts(row, self.size)
+                    self.conflicts.remove(row)
+                    return
+
+        for i in range(10):
+            col = randint(1, self.size)
+            if self.count_conflicts(row, col) == 1:
+                remove(row, self.board[row])
+                add(row, col)
+                self.update_conflicts(row, self.size)
+                return
 
 
-def min_conflicts(size):
-    """ use heuristic repair with the min-conflict heuristic
-    to reassign placed queens until either a solution is found
-    or the max step limit is reached
-    :type size: int
-    :rtype: List[int] or None
-    """
-    board, conflicts = generate_initial(size)
+    def generate_initial(self):
+        """ assign queens to spaces on initial board,
+        returning board and conflicts for each row
+        """
+        for row in range(self.size):
+            self.generate_row(row)
 
-    for i in range(100):
-        print(i)
-        if len(conflicts) == 0:
-            if len(board) <= 256:
-                return draw_board(board) + '\n' + str(board)
-            return str(board)
 
-        row = choice(tuple(conflicts))
-        board[row], conflicts = assign(board, row, conflicts)
+    def draw_board(self):
+        """ generate an nxn representation of the board
+        """
+        drawn_board = ''
 
-    return None
+        for placement in self.board:
+            for i in range(1, placement):
+                drawn_board += 'x '
+            drawn_board += 'q '
+            for j in range(placement, len(self.board)):
+                drawn_board += 'x '
+            drawn_board = drawn_board[:-1] + '\n'
+
+        return drawn_board[:-1] + '\n' + str(self.board)
+
+
+    def min_conflicts(self):
+        """ use heuristic repair with the min-conflict heuristic
+        to reassign placed queens until either a solution is found
+        or the max step limit is reached
+        :rtype: List[int] or None
+        """
+        self.generate_initial()
+
+        for i in range(100):
+            if len(self.conflicts) == 0:
+                if len(self.board) <= 256:
+                    return self.draw_board()
+                return str(self.board)
+
+            row = choice(tuple(self.conflicts))
+            self.assign(row)
+
+        return None
 
 
 def main():
@@ -112,11 +141,13 @@ def main():
     with open('nqueens.txt') as input_file:
         for line in input_file:
             while True:
-                result = min_conflicts(int(line))
+                n_queens = NQueens(int(line))
+                result = n_queens.min_conflicts()
                 if result:
                     with open('nqueens_out.txt', 'a') as output_file:
                         output_file.write(result + '\n\n')
                     break
+
 
 if __name__ == '__main__':
     main()
